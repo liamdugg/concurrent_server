@@ -1,31 +1,31 @@
 #include "../inc/server.h"
 
-// thread_t th_consumers[POOL_SIZE];
-// thread_t th_server;
-// thread_t th_producer;
+/* --------------- GLOBALES --------------- */
 
-pthread_t thread_pool[POOL_SIZE];
+pthread_t thread_pool[DEFAULT_POOL_SIZE];
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t th_cond = PTHREAD_COND_INITIALIZER;
+pthread_cond_t th_cond = PTHREAD_COND_INITIALIZER; // lets threads wait until something happens 
 
-// pthread_cond lets threads wait until something happens 
-// and it can do useful work
+/* --------------- FUNCIONES --------------- */
 
 int main(void){
 	
-	int sv_sock, cli_sock;
 	SA_IN cli_addr;
-	int addr_size;
+	server_t* server;
+	int sv_sock, cli_sock;
+	int addr_size = sizeof(SA_IN);
 
-	// creo los threads
-	for(int i=0; i < POOL_SIZE; i++)
+	// levanto la configuracion
+	server = (server_t*)malloc(sizeof(server_t));
+	init_server(server);
+
+	// creo threads consumidores
+	for(int i=0; i < DEFAULT_POOL_SIZE; i++)
 		pthread_create(&thread_pool[i], NULL, consumer_routine, NULL);
 
 	// creo socket del servidor
 	if((sv_sock = create_socket()) == -1)
 		return -1;
-
-	addr_size = sizeof(SA_IN);
 
 	// loop
 	while(true){
@@ -38,12 +38,15 @@ int main(void){
 			return -1;
 		}
 
+		server->cur_conn++;
+
 		pthread_mutex_lock(&mutex);
 		q_push(&cli_sock);
 		pthread_cond_signal(&th_cond);
 		pthread_mutex_unlock(&mutex);
 	}
 
+	free(server);
 	return 0;
 }
 
@@ -71,6 +74,78 @@ void* handle_connection(void* p_sock){
 	return NULL;
 }
 
+/* --------------- RUTINAS DE THREADS --------------- */
+
+void* consumer_routine(void* arg){
+
+	// loop
+	while(true){
+		
+		int* cli;
+
+		// lockeo el acceso a la q de sockets
+		pthread_mutex_lock(&mutex);
+		
+		// si no hay que atender, espero la cond_signal de que hay algo
+		if((cli = q_pop()) == NULL){
+			// esto ya hace el unlock del mutex
+			pthread_cond_wait(&th_cond, &mutex);
+			cli = q_pop();
+		}
+		
+		// libero el mutex
+		pthread_mutex_unlock(&mutex);
+		
+		// hay un socket que atender
+		if(cli != NULL)
+			handle_connection(cli);
+	}
+
+	// nunca deberia llegar hasta aca
+	return NULL;
+}
+
+void* producer_routine(void* arg){
+
+	// loop
+	while(true){
+
+	}
+}
+
+void* server_routine(void* arg){
+
+	// loop
+	while(true){
+
+	}
+}
+
+/* --------------- AUXILIARES --------------- */
+
+void init_server(server_t* server){
+	
+	FILE* config_file;
+	
+	if( (config_file = fopen("./config.txt", "r")) != NULL){
+		fscanf(config_file, "conexiones,%i\r\nbacklog,%i\r\npuerto,%i", &(server->max_conn), &(server->backlog), &(server->port));
+		fclose(config_file);
+	}
+
+	else { // configuracion default
+		server->port = DEFAULT_PORT;
+		server->backlog = DEFAULT_BACKLOG;
+		server->max_conn = DEFAULT_POOL_SIZE;
+		printf("No se encontro archivo de configuracion, se setearon valores por default.\n");
+	}
+
+	server->cur_conn = 0;
+
+	printf("Puerto: %i\n", server->port);
+	printf("Backlog: %i\n", server->backlog);
+	printf("Conexiones maximas: %i\n", server->max_conn);
+}
+
 int create_socket(){
 	
 	int sock;
@@ -84,7 +159,7 @@ int create_socket(){
 
 	// inicializo struct de address
 	sv_addr.sin_family = AF_INET;
-	sv_addr.sin_port = htons(SERVER_PORT);
+	sv_addr.sin_port = htons(DEFAULT_PORT);
 	sv_addr.sin_addr.s_addr = INADDR_ANY;
 
 	// bindeo socket del server a un puerto
@@ -94,49 +169,10 @@ int create_socket(){
 	}
 
 	// dejo al socket escuchando
-	if(listen(sock, BACKLOG) == -1){
+	if(listen(sock, DEFAULT_BACKLOG) == -1){
 		printf("Server --> Error en listen()\n");
 		return -1;
 	}
 
 	return sock;
-}
-
-
-// RUTINAS DE THREADS
-void* consumer_routine(void* arg){
-
-	// loop
-	while(true){
-		
-		int* cli;
-	
-		pthread_mutex_lock(&mutex);
-		
-		if((cli = q_pop()) == NULL){
-			pthread_cond_wait(&th_cond, &mutex);
-			cli = q_pop();
-		}
-
-		pthread_mutex_unlock(&mutex);
-
-		if(cli != NULL)
-			handle_connection(cli);
-	}
-}
-
-void* producer_routine(void* arg){
-
-	// loop
-	while(true){
-
-	}
-}
-
-void* server_routine(void* arg){
-	
-	// loop
-	while(true){
-
-	}
 }

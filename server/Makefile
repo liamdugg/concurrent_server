@@ -12,5 +12,8 @@ $(TARGET): $(OBJ)
 %.o: %.c
 	$(CC) $(CFLAGS) $< -o $@
 
+run:
+	./server
+
 clean:
 	rm -rf $(OBJ) $(TARGET)
