@@ -2,6 +2,6 @@
 
 for n in {1..20}
 do	
-	ruby client.rb
+	python3 client.py
 done
 wait

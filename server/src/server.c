@@ -2,6 +2,7 @@
 
 /* --------------- GLOBALES --------------- */
 
+server_t* server;
 pthread_t thread_pool[DEFAULT_POOL_SIZE];
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t th_cond = PTHREAD_COND_INITIALIZER; // lets threads wait until something happens 
@@ -11,12 +12,11 @@ pthread_cond_t th_cond = PTHREAD_COND_INITIALIZER; // lets threads wait until so
 int main(void){
 	
 	SA_IN cli_addr;
-	server_t* server;
 	int sv_sock, cli_sock;
 	int addr_size = sizeof(SA_IN);
 
 	// levanto la configuracion
-	server = (server_t*)malloc(sizeof(server_t));
+	server = (server_t*) malloc(sizeof(server_t));
 	init_server(server);
 
 	// creo threads consumidores
@@ -24,7 +24,7 @@ int main(void){
 		pthread_create(&thread_pool[i], NULL, consumer_routine, NULL);
 
 	// creo socket del servidor
-	if((sv_sock = create_socket()) == -1)
+	if((sv_sock = create_server_socket()) == -1)
 		return -1;
 
 	// loop
@@ -38,10 +38,13 @@ int main(void){
 			return -1;
 		}
 
-		server->cur_conn++;
-
 		pthread_mutex_lock(&mutex);
+		
+		// pusheo la conexion a la q
+		server->cur_conn++;
 		q_push(&cli_sock);
+		
+		// aviso que hay una conexion disponible
 		pthread_cond_signal(&th_cond);
 		pthread_mutex_unlock(&mutex);
 	}
@@ -52,24 +55,37 @@ int main(void){
 
 void* handle_connection(void* p_sock){
 
-	int sock = *((int*) p_sock);
-	size_t bytes_read;
-
 	char buf[BUF_SIZE];
+	size_t bytes_read;
+	int sock = *((int*) p_sock);
+
+	// lo uso como "thread id"
+	int th_id = server->cur_conn;
+
 	memset(buf, 0, BUF_SIZE);
-	
-	if((bytes_read = recv(sock, buf, sizeof(buf), 0)) < 0){
-		printf("Server --> Error recibiendo\n");
+	strcpy(buf, "ping");
+	send(sock,buf, strlen(buf), 0);
+
+	while(strcmp(buf, "END") != 0){
+		
+		memset(buf, 0, BUF_SIZE);
+		if((bytes_read = recv(sock, buf, sizeof(buf), 0)) < 0){
+			printf("[Server][TH %i] --> Error recibiendo\n", th_id);
+		}
+
+		printf("[Client][TH %i] --> %s\n", th_id, buf);
+
+		if(strcmp(buf, "pong") == 0){
+			memset(buf, 0, BUF_SIZE);
+			strcpy(buf, "ping");
+			send(sock,buf, strlen(buf), 0);
+		}
+
+		sleep(1);
 	}
 
-	printf("Client --> %s\n", buf);
-	fflush(stdout);
-
-	memset(buf, 0, BUF_SIZE);
-	strcpy(buf, "Se recibio el mensaje correctamente\n");
-	
-	send(sock,buf, strlen(buf), 0);
 	printf("Server --> cerrando conexion...\n");
+	server->cur_conn--;
 	close(sock);
 	return NULL;
 }
@@ -78,11 +94,11 @@ void* handle_connection(void* p_sock){
 
 void* consumer_routine(void* arg){
 
+	int* cli = NULL;
+
 	// loop
 	while(true){
 		
-		int* cli;
-
 		// lockeo el acceso a la q de sockets
 		pthread_mutex_lock(&mutex);
 		
@@ -97,8 +113,10 @@ void* consumer_routine(void* arg){
 		pthread_mutex_unlock(&mutex);
 		
 		// hay un socket que atender
-		if(cli != NULL)
+		if(cli != NULL){
 			handle_connection(cli);
+			cli = NULL;
+		}
 	}
 
 	// nunca deberia llegar hasta aca
@@ -146,7 +164,7 @@ void init_server(server_t* server){
 	printf("Conexiones maximas: %i\n", server->max_conn);
 }
 
-int create_socket(){
+int create_server_socket(){
 	
 	int sock;
 	SA_IN sv_addr;

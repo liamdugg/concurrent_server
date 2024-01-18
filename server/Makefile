@@ -13,6 +13,7 @@ $(TARGET): $(OBJ)
 	$(CC) $(CFLAGS) $< -o $@
 
 run:
+	clear
 	./server
 
 clean:

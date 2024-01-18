@@ -40,7 +40,8 @@ typedef struct {
 
 /* --------------- PROTOTIPOS --------------- */
 
-int   create_socket(void);
+// auxiliares
+int   create_server_socket(void);
 void  init_server(server_t* server);
 
 // rutinas
