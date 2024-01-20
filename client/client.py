@@ -15,12 +15,11 @@ def main(id: int):
 	client_sock.connect((server_ip,port))
 
 	times = 0
-	flag = True
 
 	while times < MAX_TIMES :
 
 		data = client_sock.recv(MAX_SIZE).decode()
-
+		
 		if data == 'ping' and times < MAX_TIMES:
 			times += 1
 			client_sock.send(b'pong')

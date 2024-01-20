@@ -1,4 +1,5 @@
 #include "../inc/server.h"
+#include "../inc/HTTPRequest.h"
 
 /* --------------- GLOBALES --------------- */
 
@@ -55,33 +56,103 @@ int main(void){
 
 void* handle_connection(void* p_sock){
 
-	char buf[BUF_SIZE];
-	size_t bytes_read;
 	int sock = *((int*) p_sock);
+	
+	HTTPRequest_t req;
+	char response_str[BUF_SIZE];
+	char header_str[100];
+
+	size_t bytes_read;
+	char buf[BUF_SIZE];
+
+	FILE* fp;
+	char  file_str[BUF_SIZE];
+	int   file_size;
 
 	// lo uso como "thread id"
 	int th_id = server->cur_conn;
 
-	memset(buf, 0, BUF_SIZE);
-	strcpy(buf, "ping");
-	send(sock,buf, strlen(buf), 0);
-
 	while(strcmp(buf, "END") != 0){
 		
 		memset(buf, 0, BUF_SIZE);
+		printf("Esperando request...\n");
+		
 		if((bytes_read = recv(sock, buf, sizeof(buf), 0)) < 0){
 			printf("[Server][TH %i] --> Error recibiendo\n", th_id);
 		}
 
-		printf("[Client][TH %i] --> %s\n", th_id, buf);
+		printf("---------- [TH %i] ----------\n", th_id);
+		printf("\n%s", buf);		
+		
+		request_init(&req, buf);
+		
+		if(strcmp(req.method, HTTP_GET) == 0){
+			
+			memset(response_str, 0, sizeof(response_str));
+			printf("FILE --> %s\n", req.path);
 
-		if(strcmp(buf, "pong") == 0){
-			memset(buf, 0, BUF_SIZE);
-			strcpy(buf, "ping");
-			send(sock,buf, strlen(buf), 0);
+			if((fp = fopen(req.path, "r")) == NULL){
+				
+				printf("[Server][TH %i] --> Envio 404\n", th_id);
+				
+				fp = fopen("./sv_files/notfound.html", "r");
+				
+				fseek(fp, 0, SEEK_END);
+				file_size = ftell(fp);
+				fseek(fp, 0, SEEK_SET);
+
+				while(!feof(fp)){
+					fread(file_str, sizeof(char), file_size, fp);
+				}
+				
+				sprintf(header_str, "Content-type:text/html; charset=utf-8\r\nContent-length:%d\r\n", file_size);
+				
+				strcat(response_str, HTTP_404);
+				strcat(response_str, header_str);
+				strcat(response_str, "\r\n");
+				strcat(response_str, file_str);
+
+				send(sock, response_str, strlen(response_str), 0);
+				printf("---------- [TH %i] ----------\n", th_id);
+				fclose(fp);
+			}
+
+			else {
+				
+				memset(file_str, 0, sizeof(file_str));
+				memset(response_str, 0, sizeof(response_str));
+
+				// obtengo largo del archivo
+				fseek(fp, 0, SEEK_END);
+				file_size = ftell(fp);
+				fseek(fp, 0, SEEK_SET);
+
+				// guardo contenidos del archivo
+				while(!feof(fp)){
+					fread(file_str, sizeof(char), file_size, fp);
+				}
+
+				// armo header
+				sprintf(header_str, "Content-type:text/html; charset=utf-8\r\nContent-length:%d\r\n", file_size);
+
+				// armo respuesta
+				strcat(response_str, HTTP_200);
+				strcat(response_str, header_str);
+				strcat(response_str, "\r\n");
+				strcat(response_str, file_str);
+				
+				// envio respuesta
+				send(sock, response_str, strlen(response_str), 0);
+				
+				printf("---------- [TH %i] ----------\n", th_id);
+				fclose(fp);
+			}
 		}
 
-		sleep(1);
+		else if(strcmp(req.method, HTTP_POST) == 0){
+
+		}
+
 	}
 
 	printf("Server --> cerrando conexion...\n");
@@ -145,7 +216,7 @@ void init_server(server_t* server){
 	
 	FILE* config_file;
 	
-	if( (config_file = fopen("./config.txt", "r")) != NULL){
+	if( (config_file = fopen("./sv_files/config.txt", "r")) != NULL){
 		fscanf(config_file, "conexiones,%i\r\nbacklog,%i\r\npuerto,%i", &(server->max_conn), &(server->backlog), &(server->port));
 		fclose(config_file);
 	}
@@ -168,12 +239,16 @@ int create_server_socket(){
 	
 	int sock;
 	SA_IN sv_addr;
+	const int aux = 1;
 
 	// creo socket del server
 	if( (sock = socket(AF_INET, SOCK_STREAM, 0)) == -1){
 		printf("Server --> Error en socket()\n");
 		return -1;
 	}
+
+	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &aux, sizeof(int)) < 0)
+    	printf("Server --> Error en setsockopt()\n");
 
 	// inicializo struct de address
 	sv_addr.sin_family = AF_INET;

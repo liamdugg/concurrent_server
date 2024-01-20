@@ -4,6 +4,8 @@ from threading import Thread
 from datetime import datetime
 
 parser = argparse.ArgumentParser()
+
+# paso un argumento de nombre number_of_clients de tipo int
 parser.add_argument('number_of_clients', type=int)
 
 # obtengo numero de clientes por linea de comandos
@@ -26,4 +28,4 @@ for x in range (0, clients):
 for thread in threads :
 	thread.join()
 
-print('Clientes terminaron')
+print(__file__ + 'Finalizo')
