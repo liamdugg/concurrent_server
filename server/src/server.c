@@ -71,13 +71,18 @@ void* handle_connection(void* p_sock){
 	// lo uso como "thread id"
 	int th_id = server->cur_conn;
 
-	while(strcmp(buf, "END") != 0){
+	while(1){
 		
 		memset(buf, 0, BUF_SIZE);
 		printf("\n[Server][TH %i] Esperando request\n", th_id);
 			
 		if((bytes_read = recv(sock, buf, sizeof(buf), 0)) < 0){
 			printf("[Server][TH %i] --> Error recibiendo\n", th_id);
+		}
+
+		else if(bytes_read == 0){
+			printf("[Server][TH %i] --> Cliente desconectado\n", th_id);
+			break;
 		}
 
 		printf("\n---------- [TH %i] REQ START ----------\n", th_id);
@@ -88,15 +93,16 @@ void* handle_connection(void* p_sock){
 		if(strcmp(req.method, HTTP_GET) == 0){ // status not found
 			
 			memset(response_str, 0, sizeof(response_str));
-			//printf("FILE --> %s\n", req.path);
+
 
 			if((fp = fopen(req.path, "r")) == NULL){
 								
 				fp = fopen("./sv_files/notfound.html", "r");
 
 				// obtengo el string para enviar				
-				http_response_not_found(fp, response_str);
-
+				http_response_not_found(fp, req.format, response_str);
+				//printf("\n%s\n", response_str);
+				
 				// envio
 				send(sock, response_str, strlen(response_str), 0);
 				printf("[Server][TH %i] ENVIO --> 404\n", th_id);
@@ -109,8 +115,9 @@ void* handle_connection(void* p_sock){
 				memset(response_str, 0, sizeof(response_str));
 
 				// obtengo el string para enviar
-				http_response_ok(fp, response_str);
-
+				http_response_ok(fp, req.format, response_str);
+				//printf("\n%s\n", response_str);
+				
 				// envio respuesta
 				send(sock, response_str, strlen(response_str), 0);
 				printf("[Server][TH %i] ENVIO --> 200\n", th_id);
@@ -126,7 +133,7 @@ void* handle_connection(void* p_sock){
 
 	}
 
-	printf("Server --> cerrando conexion...\n");
+	printf("[Server][TH %i] --> Cerrando conexion\n", th_id);
 	server->cur_conn--;
 	close(sock);
 	return NULL;

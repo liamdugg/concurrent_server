@@ -27,6 +27,7 @@ int http_request_get(HTTPRequest_t* request,char* request_str){
 		return -1;
 
 	memset(request->path, 0, sizeof(request->path));
+	memset(request->format, 0, sizeof(request->format));
 	memset(request->method, 0, sizeof(request->method));
 	memset(request->version, 0, sizeof(request->version));
 
@@ -46,6 +47,17 @@ int http_request_get(HTTPRequest_t* request,char* request_str){
 		strcat(request->path, aux);
 	}
 
+	// get file format
+	// TODO: hacerlo parseando como la gente, es la solucion rapida para probar y que ande
+	if(strstr(request->path, ".html") != NULL)
+		strcpy(request->format, "html");
+
+	else if(strstr(request->path, ".css") != NULL)
+		strcpy(request->format, "css");
+
+	else if(strstr(request->path, ".js") != NULL)
+		strcpy(request->format, "js");
+	
 	// get version
 	aux = strtok(NULL, "\r");
 	strcpy(request->version, aux);

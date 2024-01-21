@@ -1,0 +1,21 @@
+h1 {
+	color: red;
+}
+
+p,
+li {
+	color: green;
+}
+
+li {
+	list-style-type: square;
+}
+
+.special {
+	color: orange;
+	font-weight: bold;
+}
+
+h1 + p {
+	font-size: 200%;
+}

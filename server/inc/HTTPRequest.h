@@ -4,9 +4,10 @@
 
 typedef struct {
 	
-	char  method[8];
-	char  path[30];
-	char  version[9];
+	char path[30];
+	char format[5];
+	char method[8];
+	char version[9];
 
 } HTTPRequest_t;
 
