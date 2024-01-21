@@ -1,7 +1,7 @@
-CC		= gcc
-CFLAGS	= -g -c -Wall
-SOURCE	= $(wildcard src/*.c)
-OBJ		= $(SOURCE:.c=.o)
+CC = gcc
+CFLAGS = -g -c -Wall
+SRC_FILES = $(filter-out src/test.c, $(wildcard src/*.c))
+
 TARGET	= server
 
 all: build run
@@ -12,7 +12,7 @@ run:
 
 build:
 	clear
-	gcc -g -Wall src/server.c src/queue.c src/HTTPRequest.c -o server
+	gcc -g -Wall $(SRC_FILES) -o $(TARGET)
 
 test:
 	clear
@@ -23,4 +23,4 @@ testclr:
 	rm test
 
 clean:
-	rm -rf $(OBJ) $(TARGET)
+	rm -rf $(TARGET)

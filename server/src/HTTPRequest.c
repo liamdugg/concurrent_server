@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <stdarg.h>
+//#include <stdarg.h>
 #include <string.h>
 
 #include "../inc/HTTPRequest.h"
@@ -19,9 +19,12 @@
 // TODO: parsear headers
 // TODO: parsear body (de ser necesario) 
 
-int request_init(HTTPRequest_t* request,char* request_str){
+int http_request_get(HTTPRequest_t* request,char* request_str){
 
 	char* aux; 
+
+	if(request == NULL)
+		return -1;
 
 	memset(request->path, 0, sizeof(request->path));
 	memset(request->method, 0, sizeof(request->method));

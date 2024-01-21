@@ -1,5 +1,6 @@
 #include "../inc/server.h"
 #include "../inc/HTTPRequest.h"
+#include "../inc/HTTPResponse.h"
 
 /* --------------- GLOBALES --------------- */
 
@@ -60,14 +61,12 @@ void* handle_connection(void* p_sock){
 	
 	HTTPRequest_t req;
 	char response_str[BUF_SIZE];
-	char header_str[100];
 
 	size_t bytes_read;
 	char buf[BUF_SIZE];
 
 	FILE* fp;
 	char  file_str[BUF_SIZE];
-	int   file_size;
 
 	// lo uso como "thread id"
 	int th_id = server->cur_conn;
@@ -75,78 +74,50 @@ void* handle_connection(void* p_sock){
 	while(strcmp(buf, "END") != 0){
 		
 		memset(buf, 0, BUF_SIZE);
-		printf("Esperando request...\n");
-		
+		printf("\n[Server][TH %i] Esperando request\n", th_id);
+			
 		if((bytes_read = recv(sock, buf, sizeof(buf), 0)) < 0){
 			printf("[Server][TH %i] --> Error recibiendo\n", th_id);
 		}
 
-		printf("---------- [TH %i] ----------\n", th_id);
+		printf("\n---------- [TH %i] REQ START ----------\n", th_id);
 		printf("\n%s", buf);		
 		
-		request_init(&req, buf);
+		http_request_get(&req, buf);
 		
-		if(strcmp(req.method, HTTP_GET) == 0){
+		if(strcmp(req.method, HTTP_GET) == 0){ // status not found
 			
 			memset(response_str, 0, sizeof(response_str));
-			printf("FILE --> %s\n", req.path);
+			//printf("FILE --> %s\n", req.path);
 
 			if((fp = fopen(req.path, "r")) == NULL){
-				
-				printf("[Server][TH %i] --> Envio 404\n", th_id);
-				
+								
 				fp = fopen("./sv_files/notfound.html", "r");
-				
-				fseek(fp, 0, SEEK_END);
-				file_size = ftell(fp);
-				fseek(fp, 0, SEEK_SET);
 
-				while(!feof(fp)){
-					fread(file_str, sizeof(char), file_size, fp);
-				}
-				
-				sprintf(header_str, "Content-type:text/html; charset=utf-8\r\nContent-length:%d\r\n", file_size);
-				
-				strcat(response_str, HTTP_404);
-				strcat(response_str, header_str);
-				strcat(response_str, "\r\n");
-				strcat(response_str, file_str);
+				// obtengo el string para enviar				
+				http_response_not_found(fp, response_str);
 
+				// envio
 				send(sock, response_str, strlen(response_str), 0);
-				printf("---------- [TH %i] ----------\n", th_id);
+				printf("[Server][TH %i] ENVIO --> 404\n", th_id);
 				fclose(fp);
 			}
 
-			else {
+			else { // status ok
 				
 				memset(file_str, 0, sizeof(file_str));
 				memset(response_str, 0, sizeof(response_str));
 
-				// obtengo largo del archivo
-				fseek(fp, 0, SEEK_END);
-				file_size = ftell(fp);
-				fseek(fp, 0, SEEK_SET);
+				// obtengo el string para enviar
+				http_response_ok(fp, response_str);
 
-				// guardo contenidos del archivo
-				while(!feof(fp)){
-					fread(file_str, sizeof(char), file_size, fp);
-				}
-
-				// armo header
-				sprintf(header_str, "Content-type:text/html; charset=utf-8\r\nContent-length:%d\r\n", file_size);
-
-				// armo respuesta
-				strcat(response_str, HTTP_200);
-				strcat(response_str, header_str);
-				strcat(response_str, "\r\n");
-				strcat(response_str, file_str);
-				
 				// envio respuesta
 				send(sock, response_str, strlen(response_str), 0);
-				
-				printf("---------- [TH %i] ----------\n", th_id);
+				printf("[Server][TH %i] ENVIO --> 200\n", th_id);
 				fclose(fp);
 			}
+
+			printf("\n---------- [TH %i] REQ END ----------\n", th_id);
 		}
 
 		else if(strcmp(req.method, HTTP_POST) == 0){
