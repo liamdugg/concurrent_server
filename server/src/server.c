@@ -95,15 +95,12 @@ int main(void){
 				}
 				
 				else{ // cierro el server, hubo un error
+					printf("[Server] --> Cerrando servidor\n");
 					run = false;
 					break;
 				}
 			}
 
-			else if(sock_ev[i].events & EPOLLIN){ // evento en un socket cliente
-				server_handle_connection(sock_ev[i].data.fd);
-			}
-			
 			else if(sock_ev[i].events & EPOLLHUP || sock_ev[i].events & EPOLLRDHUP){ // cliente desconectado
 				
 				printf("[Server] --> Cliente desconectado\n");
@@ -111,6 +108,11 @@ int main(void){
 				server->cur_conn--;
 				close(sock_ev[i].data.fd);
 			}
+
+			else if(sock_ev[i].events & EPOLLIN){ // evento en un socket cliente
+				server_handle_connection(sock_ev[i].data.fd);
+			}
+			
 		}
 	}
 
