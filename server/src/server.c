@@ -1,196 +1,195 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdbool.h>
+#include <unistd.h>
+
+#include <errno.h>
+#include <signal.h>
+#include <string.h>
+#include <fcntl.h>
+
+#include <pthread.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/epoll.h>
+#include <sys/socket.h>
+
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #include "../inc/server.h"
 #include "../inc/HTTPRequest.h"
 #include "../inc/HTTPResponse.h"
 
 /* --------------- GLOBALES --------------- */
 
-server_t* server;
-pthread_t thread_pool[DEFAULT_POOL_SIZE];
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t th_cond = PTHREAD_COND_INITIALIZER; // lets threads wait until something happens 
+server_t* server; 
 
 /* --------------- FUNCIONES --------------- */
 
-int main(void){
-	
-	SA_IN cli_addr;
-	int sv_sock, cli_sock;
-	int addr_size = sizeof(SA_IN);
+static int  server_create_socket(void);
+static int  server_handle_connection(int sock);
+static void server_get_config(server_t* server);
 
+static int  socket_set_nonblocking(int sock);
+static int  socket_add_to_epoll(int epollfd, int sockfd, uint32_t events);
+
+int main(void){
+
+	// aux vars
+	int i;
+	bool run = true;
+	
+	// socket vars
+	int cli_sock;
+	sockaddr_in cli_addr;
+	int addr_size = sizeof(sockaddr_in);
+	
+	// epoll vars
+	int epollfd, nfds;
+	struct epoll_event sock_ev[DEFAULT_MAX_CON];
+	
 	// levanto la configuracion
 	server = (server_t*) malloc(sizeof(server_t));
-	init_server(server);
-
-	// creo threads consumidores
-	for(int i=0; i < DEFAULT_POOL_SIZE; i++)
-		pthread_create(&thread_pool[i], NULL, consumer_routine, NULL);
+	server_get_config(server);
 
 	// creo socket del servidor
-	if((sv_sock = create_server_socket()) == -1)
+	if((server->sock = server_create_socket()) == -1){
+		printf("[Server] --> Error en server_create_socket()\n");
 		return -1;
-
-	// loop
-	while(true){
-
-		// espero conexiones en listen		
-		printf("Esperando conexiones...\n");
-		
-		if((cli_sock = accept(sv_sock, (SA*)&cli_addr, (socklen_t*)&addr_size)) == -1){
-			printf("Server --> Error en accept()\n");
-			return -1;
-		}
-
-		pthread_mutex_lock(&mutex);
-		
-		// pusheo la conexion a la q
-		server->cur_conn++;
-		q_push(&cli_sock);
-		
-		// aviso que hay una conexion disponible
-		pthread_cond_signal(&th_cond);
-		pthread_mutex_unlock(&mutex);
 	}
 
+	// creo epoll
+	if((epollfd = epoll_create(1)) == -1){
+		printf("[Server] --> Error en epoll_create()\n");
+		return -1;
+	}
+
+	// agrego el server->sock a epoll
+	socket_add_to_epoll(epollfd, server->sock, EPOLLIN | EPOLLRDHUP | EPOLLHUP);
+
+	/* --------------- SERVER LOOP --------------- */
+
+	while(run == true){
+
+		// espero eventos
+		nfds = epoll_wait(epollfd, sock_ev, server->max_conn, -1);
+		
+		for(i=0; i < nfds; i++){
+			
+			if(sock_ev[i].data.fd == server->sock){ // event en server->sock
+
+				if(sock_ev[i].events & EPOLLIN){ // hay algo para leer, accept()
+					
+					if((cli_sock = accept(server->sock, (sockaddr*)&cli_addr, (socklen_t*)&addr_size)) == -1){
+						printf("[Server] --> Error en accept()\n");
+						return -1;
+					}
+
+					// seteo cliente como nonblocking y lo agrego a epoll
+					socket_set_nonblocking(cli_sock);
+					socket_add_to_epoll(epollfd, cli_sock, EPOLLIN | EPOLLHUP | EPOLLRDHUP);
+					
+					server->cur_conn++;
+					printf("[Server] --> Cliente conectado\n");
+				}
+				
+				else{ // cierro el server, hubo un error
+					run = false;
+					break;
+				}
+			}
+
+			else if(sock_ev[i].events & EPOLLIN){ // evento en un socket cliente
+				server_handle_connection(sock_ev[i].data.fd);
+			}
+			
+			else if(sock_ev[i].events & EPOLLHUP || sock_ev[i].events & EPOLLRDHUP){ // cliente desconectado
+				
+				printf("[Server] --> Cliente desconectado\n");
+				epoll_ctl(epollfd, EPOLL_CTL_DEL, sock_ev[i].data.fd, NULL);
+				server->cur_conn--;
+				close(sock_ev[i].data.fd);
+			}
+		}
+	}
+
+	// exit, no deberia llegar hasta aca
+	close(server->sock);
+	close(epollfd);
 	free(server);
 	return 0;
 }
 
-void* handle_connection(void* p_sock){
-
-	int sock = *((int*) p_sock);
-	
-	HTTPRequest_t req;
-	char response_str[BUF_SIZE];
-
-	size_t bytes_read;
-	char buf[BUF_SIZE];
+static int server_handle_connection(int sock){
 
 	FILE* fp;
-	char  file_str[BUF_SIZE];
+	HTTPRequest_t req;
+	size_t bytes_read;
 
-	// lo uso como "thread id"
-	int th_id = server->cur_conn;
-
-	while(1){
+	char buf[BUF_SIZE];
+	char file_str[BUF_SIZE];
+	char response_str[BUF_SIZE];
+	
+	memset(buf, 0, sizeof(buf));
+	memset(file_str, 0, sizeof(file_str));
+	memset(response_str, 0, sizeof(response_str));
 		
-		memset(buf, 0, BUF_SIZE);
-		printf("\n[Server][TH %i] Esperando request\n", th_id);
+	/* --------------- --------------- */
+	
+	if((bytes_read = recv(sock, buf, sizeof(buf), 0)) < 0){
+		printf("[Server][Client %i] --> Error recibiendo\n", sock);
+		return -1;
+	}
+
+	printf("\n-------------------- [CLI %i] REQ START --------------------\n", sock);
+	printf("\n%s", buf);		
+	
+	http_request_get(&req, buf);
+	
+	if(strcmp(req.method, HTTP_GET) == 0){
+
+		if((fp = fopen(req.path, "r")) == NULL){ // status not found
+
+			if((fp = fopen("./sv_files/notfound.html", "r")) == NULL)
+				return -1;
 			
-		if((bytes_read = recv(sock, buf, sizeof(buf), 0)) < 0){
-			printf("[Server][TH %i] --> Error recibiendo\n", th_id);
-		}
-
-		else if(bytes_read == 0){
-			printf("[Server][TH %i] --> Cliente desconectado\n", th_id);
-			break;
-		}
-
-		printf("\n---------- [TH %i] REQ START ----------\n", th_id);
-		printf("\n%s", buf);		
-		
-		http_request_get(&req, buf);
-		
-		if(strcmp(req.method, HTTP_GET) == 0){ // status not found
+			// armo string			
+			http_response_not_found(fp, req.format, response_str);
 			
-			memset(response_str, 0, sizeof(response_str));
-
-
-			if((fp = fopen(req.path, "r")) == NULL){
-								
-				fp = fopen("./sv_files/notfound.html", "r");
-
-				// obtengo el string para enviar				
-				http_response_not_found(fp, req.format, response_str);
-				//printf("\n%s\n", response_str);
-				
-				// envio
-				send(sock, response_str, strlen(response_str), 0);
-				printf("[Server][TH %i] ENVIO --> 404\n", th_id);
-				fclose(fp);
-			}
-
-			else { // status ok
-				
-				memset(file_str, 0, sizeof(file_str));
-				memset(response_str, 0, sizeof(response_str));
-
-				// obtengo el string para enviar
-				http_response_ok(fp, req.format, response_str);
-				//printf("\n%s\n", response_str);
-				
-				// envio respuesta
-				send(sock, response_str, strlen(response_str), 0);
-				printf("[Server][TH %i] ENVIO --> 200\n", th_id);
-				fclose(fp);
-			}
-
-			printf("\n---------- [TH %i] REQ END ----------\n", th_id);
+			// envio
+			send(sock, response_str, strlen(response_str), 0);
+			printf("[Server][Client %i] ENVIO --> 404\n", sock);
 		}
 
-		else if(strcmp(req.method, HTTP_POST) == 0){
-
+		else { // status ok
+			
+			// armo string
+			http_response_ok(fp, req.format, response_str);
+			
+			// envio
+			send(sock, response_str, strlen(response_str), 0);
+			printf("[Server][Client %i] ENVIO --> 200\n", sock);
 		}
 
+		fclose(fp);
+		printf("\n-------------------- [CLI %i] REQ END --------------------\n", sock);
+	}
+	
+	else if(strcmp(req.method, HTTP_POST) == 0){
+		// TODO: implementar
 	}
 
-	printf("[Server][TH %i] --> Cerrando conexion\n", th_id);
-	server->cur_conn--;
-	close(sock);
-	return NULL;
+	else 
+		return -1;
+
+	return 0;
 }
 
-/* --------------- RUTINAS DE THREADS --------------- */
-
-void* consumer_routine(void* arg){
-
-	int* cli = NULL;
-
-	// loop
-	while(true){
-		
-		// lockeo el acceso a la q de sockets
-		pthread_mutex_lock(&mutex);
-		
-		// si no hay que atender, espero la cond_signal de que hay algo
-		if((cli = q_pop()) == NULL){
-			// esto ya hace el unlock del mutex
-			pthread_cond_wait(&th_cond, &mutex);
-			cli = q_pop();
-		}
-		
-		// libero el mutex
-		pthread_mutex_unlock(&mutex);
-		
-		// hay un socket que atender
-		if(cli != NULL){
-			handle_connection(cli);
-			cli = NULL;
-		}
-	}
-
-	// nunca deberia llegar hasta aca
-	return NULL;
-}
-
-void* producer_routine(void* arg){
-
-	// loop
-	while(true){
-
-	}
-}
-
-void* server_routine(void* arg){
-
-	// loop
-	while(true){
-
-	}
-}
 
 /* --------------- AUXILIARES --------------- */
 
-void init_server(server_t* server){
+static void server_get_config(server_t* server){
 	
 	FILE* config_file;
 	
@@ -202,7 +201,7 @@ void init_server(server_t* server){
 	else { // configuracion default
 		server->port = DEFAULT_PORT;
 		server->backlog = DEFAULT_BACKLOG;
-		server->max_conn = DEFAULT_POOL_SIZE;
+		server->max_conn = DEFAULT_MAX_CON;
 		printf("No se encontro archivo de configuracion, se setearon valores por default.\n");
 	}
 
@@ -213,37 +212,67 @@ void init_server(server_t* server){
 	printf("Conexiones maximas: %i\n", server->max_conn);
 }
 
-int create_server_socket(){
-	
+static int server_create_socket(){
+
 	int sock;
-	SA_IN sv_addr;
+	sockaddr_in sv_addr;
 	const int aux = 1;
 
 	// creo socket del server
 	if( (sock = socket(AF_INET, SOCK_STREAM, 0)) == -1){
-		printf("Server --> Error en socket()\n");
+		printf("[Server] --> Error en socket()\n");
 		return -1;
 	}
 
+	// configuro como reutilizable (asi no molesta cuando corro el programa de nuevo muy rapido)
 	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &aux, sizeof(int)) < 0)
-    	printf("Server --> Error en setsockopt()\n");
+    	printf("[Server] --> Error en setsockopt()\n");
 
 	// inicializo struct de address
+	bzero((char*)&sv_addr, sizeof(struct sockaddr_in));
 	sv_addr.sin_family = AF_INET;
 	sv_addr.sin_port = htons(DEFAULT_PORT);
 	sv_addr.sin_addr.s_addr = INADDR_ANY;
 
 	// bindeo socket del server a un puerto
-	if(bind(sock, (SA*)&sv_addr, sizeof(sv_addr)) != 0){
-		printf("Server --> Error en bind()\n");
+	if (bind(sock, (sockaddr*)&sv_addr, sizeof(sv_addr)) != 0){
+		printf("[Server] --> Error en bind()\n");
+		return -1;
+	}
+
+	// configuro como no bloqueante
+	if (socket_set_nonblocking(sock) != 0){
+		printf("[Server] --> Error en set_nonblocking()\n");
 		return -1;
 	}
 
 	// dejo al socket escuchando
 	if(listen(sock, DEFAULT_BACKLOG) == -1){
-		printf("Server --> Error en listen()\n");
+		printf("[Server] --> Error en listen()\n");
 		return -1;
 	}
 
 	return sock;
+}
+
+static int socket_set_nonblocking(int sock){
+	
+	if (fcntl(sock, F_SETFL, fcntl(sock, F_GETFL, 0) | O_NONBLOCK) == -1)
+		return -1;
+
+	return 0;
+}
+
+static int socket_add_to_epoll(int epollfd, int sockfd, uint32_t events){
+	
+	struct epoll_event event;
+	event.events = events;
+	event.data.fd = sockfd;
+
+	if(epoll_ctl(epollfd, EPOLL_CTL_ADD, sockfd, &event) == -1){
+		printf("[Server] --> Error en epoll_ctl_add()\n");
+		return -1;
+	}
+
+	return 0;
 }
