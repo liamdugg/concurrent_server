@@ -18,8 +18,20 @@ function changeColor(color){
 
 async function requestPage(){
 
+
+	// fetch es un objeto "promise", devuelve un objeto "response"
 	const response = await fetch("http://localhost:8989/home.html");
-	const ans = await response.text();
-	console.log(ans);
+
+	console.log(response.status);
+
+	if (response.status == 200){
+		const ans = await response.text();
+		console.log(ans);
+	}
+
+	else {
+		console.error('could not fetch data');	
+	}
+
 	setTimeout(requestPage, 5000);
 }

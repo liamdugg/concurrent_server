@@ -3,18 +3,14 @@
 #include <stdbool.h>
 #include <unistd.h>
 
-#include <errno.h>
-#include <signal.h>
+#include <time.h>
 #include <string.h>
+#include <signal.h>
 #include <fcntl.h>
 
 #include <pthread.h>
-#include <sys/wait.h>
-#include <sys/types.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
-
-#include <netinet/in.h>
 #include <arpa/inet.h>
 
 #include "../inc/server.h"
@@ -23,13 +19,14 @@
 
 /* --------------- GLOBALES --------------- */
 
-server_t* server; 
+server_t* server;
 
 /* --------------- FUNCIONES --------------- */
 
 static int  server_create_socket(void);
 static int  server_handle_connection(int sock);
 static void server_get_config(server_t* server);
+static void server_get_time(char* time_str);
 
 static int  socket_set_nonblocking(int sock);
 static int  socket_add_to_epoll(int epollfd, int sockfd, uint32_t events);
@@ -91,7 +88,7 @@ int main(void){
 					socket_add_to_epoll(epollfd, cli_sock, EPOLLIN | EPOLLHUP | EPOLLRDHUP);
 					
 					server->cur_conn++;
-					printf("[Server] --> Cliente conectado\n");
+					printf("[Server] --> Cliente %i conectado\n", sock_ev[i].data.fd);
 				}
 				
 				else{ // cierro el server, hubo un error
@@ -103,7 +100,7 @@ int main(void){
 
 			else if(sock_ev[i].events & EPOLLHUP || sock_ev[i].events & EPOLLRDHUP){ // cliente desconectado
 				
-				printf("[Server] --> Cliente desconectado\n");
+				printf("[Server] --> Cliente %i desconectado\n", sock_ev[i].data.fd);
 				epoll_ctl(epollfd, EPOLL_CTL_DEL, sock_ev[i].data.fd, NULL);
 				server->cur_conn--;
 				close(sock_ev[i].data.fd);
@@ -132,11 +129,13 @@ static int server_handle_connection(int sock){
 	char buf[BUF_SIZE];
 	char file_str[BUF_SIZE];
 	char response_str[BUF_SIZE];
+	char time_str[30];
 	
 	memset(buf, 0, sizeof(buf));
 	memset(file_str, 0, sizeof(file_str));
+	//memset(time_str, 0, sizeof(time_str));
 	memset(response_str, 0, sizeof(response_str));
-		
+
 	/* --------------- --------------- */
 	
 	if((bytes_read = recv(sock, buf, sizeof(buf), 0)) < 0){
@@ -174,6 +173,9 @@ static int server_handle_connection(int sock){
 			printf("[Server][Client %i] ENVIO --> 200\n", sock);
 		}
 
+		server_get_time(time_str);
+		printf("[Server] Time --> %s\n", time_str);
+
 		fclose(fp);
 		printf("\n-------------------- [CLI %i] REQ END --------------------\n", sock);
 	}
@@ -187,7 +189,6 @@ static int server_handle_connection(int sock){
 
 	return 0;
 }
-
 
 /* --------------- AUXILIARES --------------- */
 
@@ -209,9 +210,9 @@ static void server_get_config(server_t* server){
 
 	server->cur_conn = 0;
 
-	printf("Puerto: %i\n", server->port);
-	printf("Backlog: %i\n", server->backlog);
-	printf("Conexiones maximas: %i\n", server->max_conn);
+	printf("[Server] --> Puerto: %i\n", server->port);
+	printf("[Server] --> Backlog: %i\n", server->backlog);
+	printf("[Server] --> Conexiones maximas: %i\n", server->max_conn);
 }
 
 static int server_create_socket(){
@@ -277,4 +278,12 @@ static int socket_add_to_epoll(int epollfd, int sockfd, uint32_t events){
 	}
 
 	return 0;
+}
+
+static void server_get_time(char* time_str){
+
+	time_t timer = time(NULL);
+	struct tm* time = localtime(&timer);
+
+	sprintf(time_str, "%i/%i/%i - %i:%i:%i", time->tm_mday, time->tm_mon+1, time->tm_year+1900, time->tm_hour, time->tm_min, time->tm_sec);
 }
