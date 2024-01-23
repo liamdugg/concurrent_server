@@ -4,9 +4,11 @@
     <meta charset="utf-8" />
     <title>Getting started with CSS</title>
     <link rel="stylesheet" href="styles.css" />
+    <script src="script.js"></script>
+
   </head>
 
-  <body>
+  <body onload="countUp();requestPage();">
     <h1>I am a level one heading</h1>
 
     <p>
@@ -15,9 +17,10 @@
       <a href="https://example.com">link</a>.
     </p>
 
-    <p>
-      This is the second paragraph. It contains an <em>emphasized</em> element.
-    </p>
+    <p id="counter">test test test</p>
+    <button onclick="changeColor('blue')";>Blue</button>
+    <button onclick="changeColor('red')";>Red</button>
+    <button onclick="requestPage();";>Request</button>
 
     <ul>
       <li>Item <span>one</span></li>
