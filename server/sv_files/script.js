@@ -1,37 +1,25 @@
 let counter = 0;
 
-
-function countUp(){
-	
-	counter++;
-	let element_counter = document.getElementById("counter");
-	element_counter.innerHTML = counter;
-
-	// wait 3s
-	setTimeout(countUp, 500);
-}
-
-function changeColor(color){
-	let element_counter = document.getElementById("counter");
-	element_counter.style.color = color;
-}
-
 async function requestPage(){
 
-
 	// fetch es un objeto "promise", devuelve un objeto "response"
-	const response = await fetch("http://localhost:8989/home.html");
+	const response = await fetch("http://localhost:8989/data.csv");
+	const data = await response.text();
 
-	console.log(response.status);
+	console.log('Response status --> ' + response.status);
 
 	if (response.status == 200){
-		const ans = await response.text();
-		console.log(ans);
+		
+		const parsed_data = data.split(',');
+		let element_counter = document.getElementById("counter");
+
+		element_counter.innerHTML = "<pre>" + parsed_data[0] + "\n" + parsed_data[1] + "</pre>";
+		console.log(data);
 	}
 
 	else {
 		console.error('could not fetch data');	
 	}
 
-	setTimeout(requestPage, 5000);
+	//setTimeout(requestPage, 10000);
 }

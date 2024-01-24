@@ -144,32 +144,36 @@ static int server_handle_connection(int sock){
 	}
 
 	printf("\n-------------------- [CLI %i] REQ START --------------------\n", sock);
-	printf("\n%s", buf);		
-	
+	printf("%s\n", buf);
+		
 	http_request_get(&req, buf);
-	
-	if(strcmp(req.method, HTTP_GET) == 0){
 
-		if((fp = fopen(req.path, "r")) == NULL){ // status not found
+	if(!strcmp(req.format, "csv")){ // GET Request de un dato
+	
+		http_response_sensor(response_str);
+		send(sock, response_str, strlen(response_str), 0);
+
+		printf("[Server][Client %i] ENVIO DATO --> 200\n", sock);
+	}
+
+	else if(strcmp(req.method, HTTP_GET) == 0){ // GET request de .html / .css / .js
+
+		if((fp = fopen(req.path, "r")) == NULL){ // Not Found
 
 			if((fp = fopen("./sv_files/notfound.html", "r")) == NULL)
 				return -1;
-			
-			// armo string			
+
 			http_response_not_found(fp, req.format, response_str);
 			
-			// envio
 			send(sock, response_str, strlen(response_str), 0);
 			printf("[Server][Client %i] ENVIO --> 404\n", sock);
 		}
 
 		else { // status ok
 			
-			// armo string
-			http_response_ok(fp, req.format, response_str);
-			
-			// envio
+			http_response_ok(fp, req.format, response_str);			
 			send(sock, response_str, strlen(response_str), 0);
+			
 			printf("[Server][Client %i] ENVIO --> 200\n", sock);
 		}
 

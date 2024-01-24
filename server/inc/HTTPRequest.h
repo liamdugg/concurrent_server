@@ -5,7 +5,7 @@
 typedef struct {
 	
 	char path[30];
-	char format[5];
+	char format[12];
 	char method[8];
 	char version[9];
 

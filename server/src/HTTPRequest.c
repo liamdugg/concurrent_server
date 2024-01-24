@@ -56,11 +56,16 @@ int http_request_get(HTTPRequest_t* request,char* request_str){
 		strcpy(request->format, "css");
 
 	else if(strstr(request->path, ".js") != NULL)
-		strcpy(request->format, "js");
+		strcpy(request->format, "javascript");
+
+	else if(strstr(request->path, ".csv") != NULL)
+		strcpy(request->format, "csv");
 	
 	// get version
 	aux = strtok(NULL, "\r");
 	strcpy(request->version, aux);
+
+	printf("SERVER --> %s | %s | %s | %s\n", request->path, request->format, request->method, request->version);
 
 	// para debug
 	if( (strcmp(request->method, HTTP_GET) != 0 && strcmp(request->method, HTTP_POST) !=0) || 
