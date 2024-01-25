@@ -53,7 +53,7 @@ int http_response_sensor(char* response_str){
 
 	time_t timer = time(NULL);
 	struct tm* tm_time = localtime(&timer);
-	sprintf(time_str, "%i/%i/%i - %i:%i:%i", tm_time->tm_mday, tm_time->tm_mon+1, tm_time->tm_year+1900, tm_time->tm_hour, tm_time->tm_min, tm_time->tm_sec);
+	sprintf(time_str, "%i/%i-%i:%i:%i", tm_time->tm_mday, tm_time->tm_mon+1, tm_time->tm_hour, tm_time->tm_min, tm_time->tm_sec);
 
 	srand(time(NULL));
 	int random = rand();

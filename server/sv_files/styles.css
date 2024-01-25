@@ -1,21 +1,28 @@
+html, body { 
+	height: 100%; 
+	width: 100%; 
+	margin: 0;
+	background-color: antiquewhite;
+	font-family: Arial, Helvetica, sans-serif;
+}
+
 h1 {
-	color: red;
+	font-size: 30pt;
+	text-align: center;
 }
 
-p,
-li {
-	color: green;
+.chart{
+	width: 50%;
+	height: 70%;
+	float:right;
+	/*align-content: start;*/
 }
 
-li {
-	list-style-type: square;
+#tempDiv {
+	float: left;
 }
 
-.special {
-	color: orange;
-	font-weight: bold;
+#pressureDiv{
+	float: right;
 }
 
-h1 + p {
-	font-size: 200%;
-}
