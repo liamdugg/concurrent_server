@@ -2,6 +2,8 @@ window.onload = function() {
     
 	console.log("LOADED");
 
+	const host_ip = location.host;
+
     let updateInterval = 1000; // ms
     let numberElements = 60;
     let updateCount = 0;
@@ -114,7 +116,7 @@ window.onload = function() {
 		let parsedData;
 	  
 		let dataPromise = async function () {
-		  const response = await fetch("http://localhost:8989/data.csv");
+		  const response = await fetch(host_ip + '/data.csv');
 		  const data = await response.text();
 		  return data;
 		};
@@ -123,6 +125,7 @@ window.onload = function() {
 		
 		parsedData = parsedData.split(',');
 		parsedData[1] = parseInt(parsedData[1]%100, 10);
+		parsedData[2] = parseInt(parsedData[2]%100, 10);
 		
 		updateData(parsedData);
 		setTimeout(requestPage,updateInterval);
@@ -138,7 +141,7 @@ window.onload = function() {
 			tempChartInstance.data.datasets.forEach((dataset) =>{dataset.data.push(data[1])});
 
 			pressureChartInstance.data.labels.push(data[0]);
-			pressureChartInstance.data.datasets.forEach((dataset) =>{dataset.data.push(data[1])});
+			pressureChartInstance.data.datasets.forEach((dataset) =>{dataset.data.push(data[2])});
 	   
 			if(updateCount > numberElements){
 			  tempChartInstance.data.labels.shift();
