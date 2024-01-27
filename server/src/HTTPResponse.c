@@ -45,27 +45,23 @@ int http_response_not_found(FILE* fp, char* file_type, char * response_store){
 	return 0;
 }
 
-int http_response_sensor(char* response_str){
+int http_response_sensor(float temp, float press, char* response_str){
 	
 	char time_str[30];
-	char body_str[50];
+	char body_str[80];
 	char header_str[100];
 
 	time_t timer = time(NULL);
 	struct tm* tm_time = localtime(&timer);
 	sprintf(time_str, "%i/%i-%i:%i:%i", tm_time->tm_mday, tm_time->tm_mon+1, tm_time->tm_hour, tm_time->tm_min, tm_time->tm_sec);
 
-	srand(time(NULL));
-	int random = rand();
-	
-	sprintf(body_str, "%s,%i", time_str, random);
+	sprintf(body_str, "%s,%.2f,%.2f", time_str, temp, press);
 	get_header(header_str, "csv", strlen(body_str));
 	
 	strcpy(response_str, HTTP_200);
 	strcat(response_str, header_str);
 	strcat(response_str, body_str);
 	
-	printf("[Server] --> BODY STRING: %s\n", body_str);
 	return 0;
 }
 

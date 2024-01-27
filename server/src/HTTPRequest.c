@@ -65,8 +65,6 @@ int http_request_get(HTTPRequest_t* request,char* request_str){
 	aux = strtok(NULL, "\r");
 	strcpy(request->version, aux);
 
-	printf("SERVER --> %s | %s | %s | %s\n", request->path, request->format, request->method, request->version);
-
 	// para debug
 	if( (strcmp(request->method, HTTP_GET) != 0 && strcmp(request->method, HTTP_POST) !=0) || 
 		 strcmp(request->version, HTTP_1_1) != 0){

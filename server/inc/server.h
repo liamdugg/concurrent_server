@@ -22,5 +22,12 @@ typedef struct {
 #define DEFAULT_MAX_CON		100
 #define DEFAULT_BACKLOG		20
 
+#define TEMP_INDEX			0
+#define PRES_INDEX			1
+
+#define EXIT_SERVER(x, y)	printf(x); return y;
+
 /* --------------- PROTOTIPOS --------------- */
 
+void  sigusr2_handler(int a);
+void* producer_routine(void* arg);

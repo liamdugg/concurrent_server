@@ -28,4 +28,4 @@ for x in range (0, clients):
 for thread in threads :
 	thread.join()
 
-print(__file__ + 'Finalizo')
+#print(__file__ + 'Finalizo')

@@ -2,7 +2,7 @@
 import time
 import socket
 
-MAX_SIZE  = 2048
+MAX_SIZE  = 4096
 MAX_TIMES = 2
 port = 8989
 server_ip = '127.0.0.1'
@@ -14,18 +14,12 @@ def main(id: int):
 	client_sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)    
 	client_sock.connect((server_ip,port))
 
-	times = 0
+	send_str = b'GET /notfound.html HTTP/1.1\r\nContent-type:text/html\r\n\r\n'
 
-	while times < MAX_TIMES :
+	client_sock.send(send_str)
+	data = client_sock.recv(MAX_SIZE).decode()
+	
+	print('[Cliente] ' + str(id) + ' --> '  + 'Recibido')
 
-		data = client_sock.recv(MAX_SIZE).decode()
-		
-		if data == 'ping' and times < MAX_TIMES:
-			times += 1
-			client_sock.send(b'pong')
-			print('[Server][TH ' + str(id) + '] '+ str(times) + ' --> ' + data)
-
-		time.sleep(1)
-
-	client_sock.send(b'END')
+	time.sleep(1)
 	client_sock.close()
