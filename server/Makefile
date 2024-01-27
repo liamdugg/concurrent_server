@@ -2,25 +2,17 @@ CC = gcc
 CFLAGS = -g -c -Wall
 SRC_FILES = $(filter-out src/test.c, $(wildcard src/*.c))
 
-TARGET	= server
+TARGET = server
 
 all: build run
 
 run:
 	clear
-	./server
+	sudo ./server
 
 build:
 	clear
-	gcc -g -Wall $(SRC_FILES) -o $(TARGET)
-
-test:
-	clear
-	gcc -g -Wall src/test.c src/HTTPRequest.c -o test
-	sudo ./test
-
-testclr:
-	rm test
+	gcc -g -Wall $(SRC_FILES) -o $(TARGET) -lpthread
 
 clean:
 	rm -rf $(TARGET)

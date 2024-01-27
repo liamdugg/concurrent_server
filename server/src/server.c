@@ -9,6 +9,7 @@
 
 #include <pthread.h>
 #include <sys/epoll.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/shm.h>
 #include <sys/ipc.h>
@@ -36,6 +37,7 @@ static int  server_create_socket(void);
 static int  server_handle_connection(int sock);
 static void server_get_config(server_t* server);
 static void server_exit(int shm_id, int epollfd);
+static int  get_sensor_values(int fd, float* store);
 
 static int  socket_set_nonblocking(int sock);
 static int  socket_add_to_epoll(int epollfd, int sockfd, uint32_t events);
@@ -48,7 +50,7 @@ int main(void){
 	int cli_sock;
 	sockaddr_in cli_addr;
 	int addr_size = sizeof(sockaddr_in);
-	
+
 	// shared memory vars
 	key_t key;								
 	int shm_id;
@@ -186,8 +188,8 @@ static int server_handle_connection(int sock){
 		memcpy(bmp_data, shm_consumer, sizeof(bmp_data));
 		pthread_mutex_unlock(&shm_mutex);
 
-		printf("[Server][Consumer] --> %.2f\n", bmp_data[0]);
-		printf("[Server][Consumer] --> %.2f\n", bmp_data[1]);
+		printf("[Server][Consumer] --> Temperatura: %.1f °C\n", bmp_data[TEMP_INDEX]);
+		printf("[Server][Consumer] --> Presion: %.2f hPa\n", bmp_data[PRES_INDEX]);
 
 		http_response_sensor(bmp_data[TEMP_INDEX], bmp_data[PRES_INDEX], response_str);
 		send(sock, response_str, strlen(response_str), 0);
@@ -236,14 +238,13 @@ void* producer_routine(void* arg){
 	key_t key;
 	int shm_id;
 	float* shm_producer;
-	float  bmp_data[2];
-
-	//int bmp;
+	
+	int bmp; // file descriptor del sensor
 
 	// Creo shared memory
 	key = ftok("SHAREDMEM", 1);
 
-	if ((shm_id = shmget(key, sizeof(bmp_data), 0666|IPC_CREAT)) < 0){ 
+	if ((shm_id = shmget(key, 2*sizeof(float), 0666|IPC_CREAT)) < 0){ 
         EXIT_SERVER("[Server] --> Error en shmget()\n", NULL);
 	}
 		
@@ -251,10 +252,10 @@ void* producer_routine(void* arg){
        EXIT_SERVER("[Server] --> Error en shmat()\n", NULL);
 	}
 
-	// abro el bmp180 VER LOS PARAMETROS TODAVIA NO LO PROBE EN BBB
-	// if((bmp=open()) < 0){
-	//
-	//}
+	//abro el sensor
+	if((bmp = open("/dev/bmp180", O_RDWR)) ==  -1){
+		EXIT_SERVER("[Server] --> Error en open(bmp)\n", NULL);
+	}
 
 	while(run){	
 
@@ -267,16 +268,10 @@ void* producer_routine(void* arg){
 			printf("[Server][Producer] --> Arrancando\n");
 		}
 		
-		// read()
-		// bitwise operation
-		srand(time(NULL));
-		
-		bmp_data[TEMP_INDEX] = (float) (rand() / 1000);
-		bmp_data[PRES_INDEX] = (float) (rand() / 1000);
-		memcpy(shm_producer, bmp_data, sizeof(float)*2);
+		get_sensor_values(bmp, shm_producer);		
 
-		printf("[Server][Producer] --> %.2f\n", shm_producer[0]);
-		printf("[Server][Producer] --> %.2f\n", shm_producer[1]);
+		printf("[Server][Producer] --> Temperatura: %.1f °C\n", shm_producer[TEMP_INDEX]);
+		printf("[Server][Producer] --> Presion: %.2f hPa\n", shm_producer[PRES_INDEX]);
 		
 		// libero y pongo a dormir 1 segundo para que no este leyendo todo el tiempo
 		// TODO: hacer el tiempo entre datos ajustable (1seg, 2seg, 5seg, etc...)
@@ -284,7 +279,7 @@ void* producer_routine(void* arg){
 		sleep(1);
 	}
 
-	//close(bmp);
+	close(bmp);
 	shmdt(shm_producer);
 	return NULL;
 }
@@ -309,6 +304,8 @@ void sigusr2_handler(int a){
 	sock_ev = (struct epoll_event*) realloc(sock_ev, server->max_conn * sizeof(struct epoll_event));
 	printf("[Server] Nueva configuracion --> Conexiones maximas: %i\n", server->max_conn);
 }
+
+// TODO: implementar signal para ctrl+c que haga run = false;
 
 /* --------------- AUXILIARES --------------- */
 
@@ -416,4 +413,26 @@ static void server_exit(int shm_id, int epollfd){
 	pthread_join(producer_th, NULL);
 	shmdt(shm_consumer);
 	shmctl(shm_id, IPC_RMID, NULL);
+}
+
+static int get_sensor_values(int fd, float* store){
+	
+	char data[6];
+	float bmp_data[2];
+	
+	// PRIMERA LECTURA
+	if(read(fd, data, sizeof(data)) == -1){
+		perror("[Server --> No se pudo realizar la lectura.\n");
+		return -1;
+	}
+
+	// armo las mediciones en float
+	bmp_data[TEMP_INDEX] = (data[TEMP_BYTE_1] << 8) | data[TEMP_BYTE_0];
+	bmp_data[TEMP_INDEX] = (float)(bmp_data[TEMP_INDEX]/10);
+	
+	bmp_data[PRES_INDEX] = (data[PRES_BYTE_3] << 24) | (data[PRES_BYTE_2] << 16) | (data[PRES_BYTE_1] << 8) | data[PRES_BYTE_0];
+	bmp_data[PRES_INDEX] = (float)(bmp_data[PRES_INDEX]/100); // a hPa
+
+	memcpy(store, bmp_data, sizeof(float)*2);
+	return 0;
 }

@@ -15,27 +15,14 @@ window.onload = function() {
 		
 		scales: {
             
-			x: {
-				
-            },
-
             y: {
-				max: 100,
+				max: 50,
 				min: 0,
-            },
+			},
 		},
 
 		plugins: {
 			
-			title: {
-				text: 'Temperatura',
-				display: true,
-				align: 'center',
-				font: {
-					size: 20,
-				}
-			},
-
 			legend: {
 				display: false
 			},
@@ -48,28 +35,12 @@ window.onload = function() {
 	let pressureOptions = {
 		
 		scales: {
-            
-			x: {
-				
-            },
 
-            y: {
-				max: 100,
-				min: 0,
-            },
+            y: { min: 0, },
 		},
 
 		plugins: {
 			
-			title: {
-				text: 'Presion',
-				display: true,
-				align: 'center',
-				font: {
-					size: 20,
-				}
-			},
-
 			legend: {
 				display: false
 			},
@@ -101,7 +72,7 @@ window.onload = function() {
 		data:{
 
         	datasets: [{
-            	label: "Presion [kPa]",
+            	label: "Presion [hPa]",
             	data: 0,
             	fill: false,
             	borderWidth: 1,
@@ -124,8 +95,8 @@ window.onload = function() {
 		parsedData = await dataPromise();
 		
 		parsedData = parsedData.split(',');
-		parsedData[1] = parseInt(parsedData[1]%100, 10);
-		parsedData[2] = parseInt(parsedData[2]%100, 10);
+		parsedData[1] = parseFloat(parsedData[1]);
+		parsedData[2] = parseFloat(parsedData[2]);
 		
 		updateData(parsedData);
 		setTimeout(requestPage,updateInterval);
@@ -135,8 +106,11 @@ window.onload = function() {
       
 		if(data){
 			
-			console.log(data);
-
+			//console.log(data);
+			const temp = document.getElementById('tempDisplay');
+			const time = document.getElementById('timeDisplay');
+			const pressure = document.getElementById('pressureDisplay');
+			
 			tempChartInstance.data.labels.push(data[0]);
 			tempChartInstance.data.datasets.forEach((dataset) =>{dataset.data.push(data[1])});
 
@@ -149,15 +123,21 @@ window.onload = function() {
 			  pressureChartInstance.data.labels.shift();
 			  pressureChartInstance.data.datasets[0].data.shift();
 			}
-	
+			
 			else updateCount++;
+
+			temp.innerHTML = 'Temperatura: ' + String(data[1]) + ' °C';
+			pressure.innerHTML = 'Presion: ' + String(data[2]) + ' hPa';
+			//console.log(data[0]);
+			//console.log(typeof(data[0]));
+			time.innerHTML = String(data[0]);
+
 			tempChartInstance.update();
 			pressureChartInstance.update();
 		  }
 	};
 	
 	function updateData(parsedData){
-		console.log(parsedData);
 		addData(parsedData);
 	}
 

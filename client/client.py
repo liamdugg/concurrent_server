@@ -5,7 +5,7 @@ import socket
 MAX_SIZE  = 4096
 MAX_TIMES = 2
 port = 8989
-server_ip = '127.0.0.1'
+server_ip = '192.168.0.115'
 
 def main(id: int):
 
