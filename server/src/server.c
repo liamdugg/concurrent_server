@@ -70,6 +70,7 @@ int main(void){
 	}
 
 	signal(SIGUSR2, (__sighandler_t) sigusr2_handler); 			// creo signal
+	signal(SIGINT,  (__sighandler_t)  sigint_handler);
 	pthread_create(&producer_th, NULL, producer_routine, NULL);	// creo thread productor (lector del sensor)
 
 	// Creo shared memory
@@ -263,19 +264,18 @@ void* producer_routine(void* arg){
 
 		// si no hay conexiones activas suspendo el thread
 		if(server->cur_conn == 0){ 
-			printf("[Server][Producer] --> A mimir\n");
+			printf("[Server][Producer] --> A dormir\n");
 			pthread_cond_wait(&shm_cond, &shm_mutex);
-			printf("[Server][Producer] --> Arrancando\n");
+			printf("[Server][Producer] --> Despierto\n");
 		}
 		
-		get_sensor_values(bmp, shm_producer);		
+		if(server->cur_conn > 0)
+			get_sensor_values(bmp, shm_producer);		
 
-		printf("[Server][Producer] --> Temperatura: %.1f °C\n", shm_producer[TEMP_INDEX]);
-		printf("[Server][Producer] --> Presion: %.2f hPa\n", shm_producer[PRES_INDEX]);
-		
-		// libero y pongo a dormir 1 segundo para que no este leyendo todo el tiempo
-		// TODO: hacer el tiempo entre datos ajustable (1seg, 2seg, 5seg, etc...)
 		pthread_mutex_unlock(&shm_mutex);
+		
+		// pongo a dormir 1 segundo para que no este leyendo todo el tiempo
+		// TODO: hacer el tiempo entre datos ajustable (1seg, 2seg, 5seg, etc...)
 		sleep(1);
 	}
 
@@ -284,7 +284,7 @@ void* producer_routine(void* arg){
 	return NULL;
 }
 
-/* --------------- SIGNAL --------------- */
+/* --------------- SIGNALS --------------- */
 
 void sigusr2_handler(int a){
 	
@@ -305,7 +305,18 @@ void sigusr2_handler(int a){
 	printf("[Server] Nueva configuracion --> Conexiones maximas: %i\n", server->max_conn);
 }
 
-// TODO: implementar signal para ctrl+c que haga run = false;
+void sigint_handler(int a){
+	
+	run = false;
+
+	if(server->cur_conn == 0){
+		pthread_mutex_lock(&shm_mutex);
+		pthread_cond_signal(&shm_cond);
+		pthread_mutex_unlock(&shm_mutex);
+	}
+
+	printf("[Server] --> Cerrando servidor\n");
+}
 
 /* --------------- AUXILIARES --------------- */
 

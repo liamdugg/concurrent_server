@@ -34,9 +34,10 @@ typedef struct {
 #define PRES_BYTE_1 		4
 #define PRES_BYTE_0 		5
 
-#define EXIT_SERVER(x, y)	printf(x); return y;
+#define EXIT_SERVER(x, y)	printf(x); run = false; return y; 
 
 /* --------------- PROTOTIPOS --------------- */
 
 void  sigusr2_handler(int a);
+void  sigint_handler(int a);
 void* producer_routine(void* arg);
